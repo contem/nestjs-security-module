@@ -1,6 +1,6 @@
 {
   "name": "nestjs-security-module",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "A plug-and-play NestJS security module with CORS, Helmet, rate limiting, audit logging, CSP, XSS sanitization, and more.",
   "author": "Yunus Emre Buğuş <contem.fe@gmail.com>",
   "license": "MIT",
@@ -53,6 +53,8 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.10.7",
     "@types/supertest": "^6.0.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -84,10 +86,17 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/contem/nestjs-security-module"
+    "url": "git+https://github.com/contem/nestjs-security-module.git"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0"
-  }
+  },
+  "directories": {
+    "test": "test"
+  },
+  "bugs": {
+    "url": "https://github.com/contem/nestjs-security-module/issues"
+  },
+  "homepage": "https://github.com/contem/nestjs-security-module#readme"
 }
