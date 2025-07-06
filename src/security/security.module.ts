@@ -1,80 +1,100 @@
 import {
   DynamicModule,
-  Inject,
   MiddlewareConsumer,
   Module,
   NestModule,
   Provider,
+  Inject,
+  Global,
 } from '@nestjs/common';
 import helmet from 'helmet';
-import { SecurityModuleOptions,SecurityModuleAsyncOptions } from './security.config';
+import {
+  ConfigModule
+} from '@nestjs/config';
+import {
+  SecurityModuleOptions,
+  SecurityModuleAsyncOptions,
+} from './security.config';
 import { createAuditLogMiddleware } from './middlewares/audit-log.middleware';
 import { createRateLimitMiddleware } from './middlewares/rate-limit.middleware';
-const SECURITY_OPTIONS = Symbol('SECURITY_OPTIONS');
 
+export const SECURITY_MODULE_OPTIONS = 'SECURITY_MODULE_OPTIONS';
+
+/**
+ * SecurityModule provides sync and async config APIs.
+ * Use forRoot for static config, forRootAsync to read from ConfigService/env.
+ */
+@Global()
 @Module({})
 export class SecurityModule implements NestModule {
-  static options: SecurityModuleOptions;
-  static enableCors = false;
-  static corsOptions: any = undefined;
-  static sanitizeEnabled = false;
+  static register(securityConfig: SecurityModuleOptions): import("@nestjs/common").Type<any> | DynamicModule | Promise<DynamicModule> | import("@nestjs/common").ForwardReference<any> {
+    throw new Error('Method not implemented.');
+  }
+  constructor(
+    @Inject(SECURITY_MODULE_OPTIONS)
+    private readonly options: SecurityModuleOptions,
+  ) {}
 
+  /**
+   * Synchronous configuration.
+   */
   static forRoot(options: SecurityModuleOptions): DynamicModule {
     const optsProvider: Provider = {
-      provide: SECURITY_OPTIONS,
+      provide: SECURITY_MODULE_OPTIONS,
       useValue: options,
     };
     return {
       module: SecurityModule,
       providers: [optsProvider],
+      exports: [optsProvider],
     };
   }
 
-  static forRootAsync(opts: SecurityModuleAsyncOptions): DynamicModule {
-    const asyncProvider: Provider = {
-      provide: SECURITY_OPTIONS,
-      useFactory: opts.useFactory,
-      inject: opts.inject || [],
+  /**
+   * Asynchronous configuration via ConfigModule and ConfigService.
+   */
+  static forRootAsync(asyncOptions: SecurityModuleAsyncOptions): DynamicModule {
+    const asyncOptsProvider: Provider = {
+      provide: SECURITY_MODULE_OPTIONS,
+      useFactory: asyncOptions.useFactory,
+      inject: asyncOptions.inject || [],
     };
     return {
       module: SecurityModule,
-      imports: opts.imports || [],
-      providers: [asyncProvider],
+      imports: [...(asyncOptions.imports || []), ConfigModule],
+      providers: [asyncOptsProvider],
+      exports: [asyncOptsProvider],
     };
   }
 
-  static register(options: SecurityModuleOptions): DynamicModule {
-    this.options = options;
-    this.sanitizeEnabled = !!options.sanitize;
-
-    // 🔧 Bunları ekle:
-    this.enableCors = !!options.cors;
-    this.corsOptions =
-      typeof options.cors === 'object' ? options.cors : undefined;
-
-    return {
-      module: SecurityModule,
-    };
-  }
-
-  constructor(
-    // Nest, SECURITY_OPTIONS token’ıyla register ettiğiniz değeri buraya inject edecek
-    @Inject(SECURITY_OPTIONS) private options: SecurityModuleOptions,
-  ) {}
-  
   configure(consumer: MiddlewareConsumer) {
-    const options = SecurityModule.options;
+    const options = this.options;
+    if (!options) {
+      throw new Error(
+        '[SecurityModule] SecurityModuleOptions not provided. Use forRoot or forRootAsync to configure.',
+      );
+    }
 
-    // Helmet genel
+    // Helmet default
     if (options.helmet !== false) {
       consumer.apply(helmet()).forRoutes('*');
     }
 
-    // CORS
+    // CORS custom - simple header approach
     if (options.cors) {
-      SecurityModule.enableCors = true;
-      SecurityModule.corsOptions =
-        typeof options.cors === 'object' ? options.cors : undefined;
+      const corsOpts =
+        typeof options.cors === 'object' ? options.cors : {};
+      consumer
+        .apply((_req: any, res: { setHeader: (arg0: string, arg1: any) => void; }, next: () => void) => {
+          if (corsOpts.origin) {
+            res.setHeader('Access-Control-Allow-Origin', corsOpts.origin);
+          }
+          if (corsOpts.methods) {
+            res.setHeader('Access-Control-Allow-Methods', corsOpts.methods);
+          }
+          next();
+        })
+        .forRoutes('*');
     }
 
     // Rate Limiting
@@ -97,27 +117,25 @@ export class SecurityModule implements NestModule {
           : {
               useDefaults: true,
               directives: {
-                'default-src': ["'self'"],
-                'script-src': ["'self'"],
-                'style-src': ["'self'", "'unsafe-inline'"],
-                'img-src': ["'self'", 'data:'],
+                "default-src": ["'self'"],
+                "script-src": ["'self'"],
+                "style-src": ["'self'", "'unsafe-inline'"],
+                "img-src": ["'self'", 'data:'],
               },
             };
-      consumer.apply(helmet.contentSecurityPolicy(cspConfig)).forRoutes('*');
+      consumer
+        .apply(helmet.contentSecurityPolicy(cspConfig))
+        .forRoutes('*');
     }
 
     // X-Frame-Options
     if (options.xFrameOptions) {
-      const frameValue =
+      const action =
         typeof options.xFrameOptions === 'string'
           ? options.xFrameOptions.toLowerCase()
           : 'sameorigin';
       consumer
-        .apply(
-          helmet.frameguard({
-            action: frameValue as 'sameorigin' | 'deny',
-          }),
-        )
+        .apply(helmet.frameguard({ action: action as any }))
         .forRoutes('*');
     }
 
@@ -150,55 +168,41 @@ export class SecurityModule implements NestModule {
         typeof options.expectCt === 'object'
           ? options.expectCt
           : { maxAge: 86400, enforce: true };
-
       consumer
-        .apply(
-          (
-            req,
-            res: import('express').Response,
-            next: import('express').NextFunction,
-          ) => {
-            res.setHeader(
-              'Expect-CT',
-              `max-age=${expectCtConfig.maxAge}${
-                expectCtConfig.enforce ? ', enforce' : ''
-              }`,
-            );
-            next();
-          },
-        )
+        .apply((_: any, res: { setHeader: (arg0: string, arg1: string) => void; }, next: () => void) => {
+          res.setHeader(
+            'Expect-CT',
+            `max-age=${expectCtConfig.maxAge}${
+              expectCtConfig.enforce ? ', enforce' : ''
+            }`,
+          );
+          next();
+        })
         .forRoutes('*');
     }
 
     // Permissions-Policy
     if (options.permissionsPolicy) {
-      const policy = Object.entries(
-        options.permissionsPolicy as Record<string, string[]>,
-      )
+      const policy = Object.entries(options.permissionsPolicy)
         .map(([key, val]) => `${key}=(${val.join(' ')})`)
         .join(', ');
-
       consumer
-        .apply(
-          (
-            req,
-            res: import('express').Response,
-            next: import('express').NextFunction,
-          ) => {
-            res.setHeader('Permissions-Policy', policy);
-            next();
-          },
-        )
+        .apply((_: any, res: { setHeader: (arg0: string, arg1: string) => void; }, next: () => void) => {
+          res.setHeader('Permissions-Policy', policy);
+          next();
+        })
         .forRoutes('*');
     }
 
-    // COEP
+    // Cross-Origin-Embedder-Policy
     if (options.crossOriginEmbedderPolicy !== false) {
-      const coep =
+      const coepConfig =
         typeof options.crossOriginEmbedderPolicy === 'object'
           ? options.crossOriginEmbedderPolicy
           : {};
-      consumer.apply(helmet.crossOriginEmbedderPolicy(coep)).forRoutes('*');
+      consumer
+        .apply(helmet.crossOriginEmbedderPolicy(coepConfig))
+        .forRoutes('*');
     }
   }
 }
