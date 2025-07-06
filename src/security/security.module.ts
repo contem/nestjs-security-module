@@ -1,14 +1,16 @@
 import {
   DynamicModule,
+  Inject,
   MiddlewareConsumer,
   Module,
   NestModule,
   Provider,
 } from '@nestjs/common';
 import helmet from 'helmet';
-import { SecurityModuleOptions } from './security.config';
+import { SecurityModuleOptions,SecurityModuleAsyncOptions } from './security.config';
 import { createAuditLogMiddleware } from './middlewares/audit-log.middleware';
 import { createRateLimitMiddleware } from './middlewares/rate-limit.middleware';
+const SECURITY_OPTIONS = Symbol('SECURITY_OPTIONS');
 
 @Module({})
 export class SecurityModule implements NestModule {
@@ -18,16 +20,26 @@ export class SecurityModule implements NestModule {
   static sanitizeEnabled = false;
 
   static forRoot(options: SecurityModuleOptions): DynamicModule {
-    this.options = options;
-    this.sanitizeEnabled = !!options.sanitize;
-
-    const imports = [];
-    const providers: Provider[] = [];
-
+    const optsProvider: Provider = {
+      provide: SECURITY_OPTIONS,
+      useValue: options,
+    };
     return {
       module: SecurityModule,
-      imports,
-      providers,
+      providers: [optsProvider],
+    };
+  }
+
+  static forRootAsync(opts: SecurityModuleAsyncOptions): DynamicModule {
+    const asyncProvider: Provider = {
+      provide: SECURITY_OPTIONS,
+      useFactory: opts.useFactory,
+      inject: opts.inject || [],
+    };
+    return {
+      module: SecurityModule,
+      imports: opts.imports || [],
+      providers: [asyncProvider],
     };
   }
 
@@ -45,6 +57,11 @@ export class SecurityModule implements NestModule {
     };
   }
 
+  constructor(
+    // Nest, SECURITY_OPTIONS token’ıyla register ettiğiniz değeri buraya inject edecek
+    @Inject(SECURITY_OPTIONS) private options: SecurityModuleOptions,
+  ) {}
+  
   configure(consumer: MiddlewareConsumer) {
     const options = SecurityModule.options;
 
