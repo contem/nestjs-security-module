@@ -1,6 +1,6 @@
 {
   "name": "nestjs-security-module",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A plug-and-play NestJS security module with CORS, Helmet, rate limiting, audit logging, CSP, XSS sanitization, and more.",
   "author": "Yunus Emre Buğuş <contem.fe@gmail.com>",
   "license": "MIT",
