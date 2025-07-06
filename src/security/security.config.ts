@@ -1,3 +1,5 @@
+import { DynamicModule, Type } from "@nestjs/common";
+
 export interface SecurityModuleOptions {
   helmet?: boolean;
   cors?: boolean | Record<string, any>;
@@ -16,4 +18,10 @@ export interface SecurityModuleOptions {
   expectCt?: boolean | Record<string, any>;
   permissionsPolicy?: boolean | Record<string, string[]>;
   crossOriginEmbedderPolicy?: boolean | Record<string, any>;
+}
+
+export interface SecurityModuleAsyncOptions {
+  imports?: Array<Type<any> | DynamicModule | Promise<DynamicModule>>;
+  inject?: any[];
+  useFactory: (...args: any[]) => SecurityModuleOptions | Promise<SecurityModuleOptions>;
 }
