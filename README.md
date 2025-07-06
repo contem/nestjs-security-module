@@ -15,8 +15,6 @@
 4. [Async / Env-Based Configuration](#async--env-based-configuration)  
 5. [Options Reference](#options-reference)  
 6. [Example `.env`](#example-env)  
-7. [Contributing](#contributing)  
-8. [License](#license)
 
 ---
 
